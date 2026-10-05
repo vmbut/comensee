@@ -8,7 +8,7 @@
 
   --ink: #1c1c1c;                           /* crayon black, as in the logo */
 
-  /* Handwriting, close to the lettering on the Come n See posters */
+  /* Handwriting, close to the lettering on the Come n See poster */
   --font: "Nanum Pen Script", "Bradley Hand", "Segoe Print", cursive;
 
   /* Squarespace's fluid type: (size - 1) * 1.2vw + 1rem, capped at the max page width */
@@ -89,16 +89,16 @@ h3 { font-size: calc(var(--fs-h3) * 1.5); color: var(--h3); font-weight: 400; li
   object-fit: cover;
   filter: drop-shadow(0.6px 1.4px 1.5px rgba(40, 30, 20, .4));
 }
-/* Mixed-media posters are shown whole in the middle of the screen. The
-   hand-made ones are transparent around their pieces, so the paper shows
-   and the shadow falls around each piece. */
-.print.poster { padding: 4svh var(--site-gutter); }
-.print.poster canvas, .print.poster img { object-fit: contain; filter: drop-shadow(0 4px 14px rgba(40, 30, 20, .25)); }
+/* A collage's print is shown whole in the middle of the screen, as a sheet
+   laid on the paper; it's transparent where the pieces were cut out, so the
+   paper shows through. */
+.print.collage { padding: 4svh var(--site-gutter); }
+.print.collage img { object-fit: contain; filter: drop-shadow(0 4px 14px rgba(40, 30, 20, .25)); }
 /* On upright screens a landscape print would lose its sides, so it sits whole in the middle */
 @media (orientation: portrait) {
   .print { display: flex; align-items: center; }
   .print canvas { height: auto; }
-  .print.poster canvas, .print.poster img { height: 100%; }
+  .print.collage img { height: 100%; }
 }
 
 /* Plain centred page (404) */

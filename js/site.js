@@ -6,7 +6,10 @@
 // - the star show on the first screen shows only the stars, as if the
 //   people had been cut out of the print and laid on the page;
 // - the prints below show the same photo at the same time, with the
-//   star-shaped holes, and some photos as mixed-media posters.
+//   star-shaped holes.
+// Photos with data-cutout and data-print are hand-made collages split in
+// two: the cut-out pieces (data-cutout) take the stars' place on the first
+// screen, and the photo they were cut from (data-print) is the print below.
 
 var photos = readPhotos(document.querySelector('.star-show template'));
 var show = document.querySelector('.star-show');
@@ -27,9 +30,8 @@ function readPhotos(template) {
         for (var i = 0; i + 1 < v.length; i += 2) pts.push([v[i] / 100, v[i + 1] / 100]);
         return pts;
       }),
-      style: el.dataset.style || '',
-      poster: el.dataset.poster || '',
-      face: Number(el.dataset.face || 0),
+      cutout: el.dataset.cutout || '',
+      printSrc: el.dataset.print || '',
       img: null,
       ready: false,
       waiting: []
@@ -37,7 +39,8 @@ function readPhotos(template) {
   });
 }
 
-// Load a photo once and make its print; call back when it's ready.
+// Load a photo once and make its print (or, for a collage, load its cut-out
+// pieces); call back when it's ready.
 function loadPhoto(photo, done) {
   if (photo.ready) { if (done) done(photo); return; }
   if (done) photo.waiting.push(done);
@@ -46,11 +49,11 @@ function loadPhoto(photo, done) {
   photo.img.onload = function () {
     photo.w = photo.img.naturalWidth;
     photo.h = photo.img.naturalHeight;
-    photo.print = printed(photo.img);
+    if (!photo.cutout) photo.print = printed(photo.img);
     photo.ready = true;
     photo.waiting.splice(0).forEach(function (f) { f(photo); });
   };
-  photo.img.src = photo.src;
+  photo.img.src = photo.cutout || photo.src;
 }
 
 // Make the photo look printed: ink never gets fully black or paper fully
@@ -169,8 +172,9 @@ function addShape(path, x, y, points) {
 }
 
 // Star show: the people cut out in stars are put down one by one, held,
-// and lifted off as the next photo's go down. onSlide(i) is told each time
-// photo i starts, so the prints below can change with it.
+// and lifted off as the next photo's go down; a collage's cut-out pieces are
+// put down and lifted off whole. onSlide(i) is told each time photo i
+// starts, so the prints below can change with it.
 function startStarShow(show, slides, onSlide) {
   var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   var SLIDE_MS = reduced ? 6000 : 3200; // from one photo appearing to the next
@@ -200,10 +204,19 @@ function startStarShow(show, slides, onSlide) {
 
   // Scale the photo so its people fit that space, centred, but never larger
   // than it takes to cover the screen; then cut the people out in stars.
+  // A collage's pieces just fit the space, centred.
   function layout(slide) {
-    var b = bbox(slide.people);
     var r0 = room(), bw = r0.right - r0.left, bh = r0.bottom - r0.top;
     var pad = Math.min(bw, bh) * 0.03;
+    if (slide.cutout) {
+      var k = Math.min(bw * 0.8 / slide.w, (bh - 2 * pad) / slide.h, 1);
+      slide.scale = k;
+      slide.x = (r0.left + r0.right - slide.w * k) / 2;
+      slide.y = (r0.top + r0.bottom - slide.h * k) / 2;
+      slide.stars = [];
+      return;
+    }
+    var b = bbox(slide.people);
     var scale = Math.min((bw - 2 * pad) / ((b.x1 - b.x0) * slide.w), (bh - 2 * pad) / ((b.y1 - b.y0) * slide.h), Math.max(W / slide.w, H / slide.h));
     var iw = slide.w * scale, ih = slide.h * scale;
     slide.scale = scale;
@@ -226,6 +239,19 @@ function startStarShow(show, slides, onSlide) {
   function draw(now) {
     ctx.clearRect(0, 0, W, H);
     active.forEach(function (slide) {
+      if (slide.cutout) {
+        // the pieces go down halfway through the stars' spread, and lift off the same
+        var half = SPREAD_MS / 2;
+        if (now < slide.start + half || (slide.end != null && now >= slide.end + half)) return;
+        ctx.save();
+        ctx.shadowColor = 'rgba(40, 30, 20, .3)';
+        ctx.shadowBlur = 4;
+        ctx.shadowOffsetX = 0.8;
+        ctx.shadowOffsetY = 2;
+        ctx.drawImage(slide.img, slide.x, slide.y, slide.w * slide.scale, slide.h * slide.scale);
+        ctx.restore();
+        return;
+      }
       var stars = slide.stars.filter(function (s) { return shown(slide, s, now); });
       if (stars.length) layStars(ctx, stars, slide.print, slide.x, slide.y, slide.w * slide.scale, slide.h * slide.scale, grain);
     });
@@ -340,15 +366,14 @@ function layStars(g, stars, print, x, y, iw, ih, grain) {
 
 // Prints: one full screen below the star show, always showing the photo the
 // stars above come from and changing with it. Most photos are a print with
-// the people cut out in stars; those with data-poster show that hand-made
-// poster instead, and those with data-style a generated mixed-media diptych.
-// Returns show(i), which the star show calls.
+// the people cut out in stars; a collage shows the hand-made print its
+// pieces were cut from. Returns show(i), which the star show calls.
 function startPrints(section, list) {
   var figs = list.map(function (photo) {
     var fig = document.createElement('figure');
-    fig.className = 'print' + (photo.poster || photo.style ? ' poster' : '');
-    var el = document.createElement(photo.poster ? 'img' : 'canvas');
-    if (photo.poster) el.alt = 'Mixed-media collage from a Come n See event';
+    fig.className = 'print' + (photo.printSrc ? ' collage' : '');
+    var el = document.createElement(photo.printSrc ? 'img' : 'canvas');
+    if (photo.printSrc) el.alt = 'Photo from a Come n See event, with pieces cut out and drawn over in red';
     else {
       el.setAttribute('role', 'img');
       el.setAttribute('aria-label', 'Photo from a Come n See event, with the people cut out in stars');
@@ -362,12 +387,10 @@ function startPrints(section, list) {
   function make(fig) {
     var photo = fig.photo;
     if (fig.made) return;
-    if (photo.poster) { fig.made = true; fig.querySelector('img').src = photo.poster; return; }
+    if (photo.printSrc) { fig.made = true; fig.querySelector('img').src = photo.printSrc; return; }
     if (!photo.ready) return;
     fig.made = true;
-    var canvas = fig.querySelector('canvas');
-    if (photo.style === 'halftone') makeHalftone(canvas, photo);
-    else makeCutPrint(canvas, photo);
+    makeCutPrint(fig.querySelector('canvas'), photo);
   }
 
   return function show(i) {
@@ -389,194 +412,6 @@ function makeCutPrint(canvas, photo) {
   starsFor(photo, 0, 0, w, h, Math.max(w, h) * 0.01).forEach(function (s) { addShape(holes, s.x, s.y, s.star); });
   g.globalCompositeOperation = 'destination-out';
   g.fill(holes);
-}
-
-// Mixed-media diptychs are posters of two 3:2 halves, PW wide.
-var PW = 1200, PH = 800;
-
-// Cover a PW by PH half with the photo, cropped around its people.
-function coverHalf(photo) {
-  var w = photo.print.width, h = photo.print.height, b = bbox(photo.people);
-  var s = Math.max(PW / w, PH / h);
-  function clamp(v, lo, hi) { return Math.min(Math.max(v, lo), hi); }
-  return {
-    x: clamp(PW / 2 - (b.x0 + b.x1) / 2 * w * s, PW - w * s, 0),
-    y: clamp(PH / 2 - (b.y0 + b.y1) / 2 * h * s, PH - h * s, 0),
-    w: w * s,
-    h: h * s
-  };
-}
-
-// A sheet of coloured paper with grain and fibres, drawn at (x, y). It's
-// made on its own canvas, so it can be drawn turned or clipped.
-function paper(g, x, y, w, h, colour, fibre) {
-  var c = document.createElement('canvas');
-  c.width = Math.ceil(w); c.height = Math.ceil(h);
-  var p = c.getContext('2d');
-  p.fillStyle = colour;
-  p.fillRect(0, 0, w, h);
-  p.lineCap = 'round';
-  for (var i = 0; i < w * h / 2400; i++) {
-    var fx = Math.random() * w, fy = Math.random() * h, a = Math.random() * Math.PI * 2, len = 5 + Math.random() * 18;
-    p.strokeStyle = Math.random() < 0.6 ? fibre : 'rgba(255, 255, 255, .35)';
-    p.lineWidth = 0.6 + Math.random();
-    p.beginPath();
-    p.moveTo(fx, fy);
-    p.quadraticCurveTo(fx + Math.cos(a + 1) * len / 2, fy + Math.sin(a + 1) * len / 2, fx + Math.cos(a) * len, fy + Math.sin(a) * len);
-    p.stroke();
-  }
-  var img = p.getImageData(0, 0, c.width, c.height), d = img.data;
-  for (var j = 0; j < d.length; j += 4) {
-    var n = (Math.random() - 0.5) * 22;
-    d[j] += n; d[j + 1] += n; d[j + 2] += n;
-  }
-  p.putImageData(img, 0, 0);
-  g.drawImage(c, x, y);
-}
-
-// Handwriting in the site's pen font, once the font has loaded.
-function handwrite(g, text, x, y, size, colour, turn, align) {
-  function draw() {
-    g.save();
-    g.translate(x, y);
-    g.rotate(turn);
-    g.font = size + 'px "Nanum Pen Script", cursive';
-    g.textAlign = align || 'left';
-    g.fillStyle = colour;
-    g.fillText(text, 0, 0);
-    g.restore();
-  }
-  if (document.fonts && document.fonts.load) document.fonts.load(size + 'px "Nanum Pen Script"').then(draw, draw);
-  else draw();
-}
-
-// The square around one person's face, in fractions of the photo.
-function faceBox(photo) {
-  var poly = photo.people[Math.min(photo.face, photo.people.length - 1)];
-  var b = bbox([poly]);
-  var w = photo.print.width, h = photo.print.height;
-  var headBottom = b.y0 + Math.min(0.28 * (b.y1 - b.y0), 0.8 * (b.x1 - b.x0) * w / h);
-  var top = poly.filter(function (p) { return p[1] <= headBottom; });
-  var hx0 = Math.min.apply(null, top.map(function (p) { return p[0]; }));
-  var hx1 = Math.max.apply(null, top.map(function (p) { return p[0]; }));
-  var side = Math.max((hx1 - hx0) * w, (headBottom - b.y0) * h) * 1.5; // in print pixels
-  return { cx: (hx0 + hx1) / 2 * w, cy: (b.y0 + headBottom) / 2 * h, side: side };
-}
-
-// A halftone print of part of an image: dots of cyan, magenta and yellow,
-// slightly off register, under black dots, on white.
-function halftone(g, src, sx, sy, sw, x, y, size) {
-  var cells = 46, cell = size / cells;
-  var t = document.createElement('canvas');
-  t.width = t.height = cells;
-  var tg = t.getContext('2d');
-  tg.drawImage(src, sx, sy, sw, sw, 0, 0, cells, cells);
-  var d = tg.getImageData(0, 0, cells, cells).data;
-  // stretch the contrast, so dark faces still print with detail
-  var lums = [];
-  for (var j = 0; j < d.length; j += 4) lums.push(0.3 * d[j] + 0.59 * d[j + 1] + 0.11 * d[j + 2]);
-  lums.sort(function (a, b) { return a - b; });
-  var lo = lums[Math.floor(lums.length * 0.04)], hi = lums[Math.floor(lums.length * 0.96)];
-  var gain = 235 / Math.max(30, hi - lo);
-  for (j = 0; j < d.length; j += 4) {
-    for (var ch = 0; ch < 3; ch++) d[j + ch] = Math.min(255, Math.max(0, (d[j + ch] - lo) * gain + 10));
-  }
-  g.save();
-  g.fillStyle = '#f4f1ea';
-  g.fillRect(x, y, size, size);
-  g.globalCompositeOperation = 'multiply';
-  [['#00a3d1', 0, -1.8, -0.8], ['#e0157a', 1, 1.6, 0.6], ['#f2d000', 2, 0.4, 1.8]].forEach(function (ink) {
-    g.fillStyle = ink[0];
-    g.globalAlpha = 0.75;
-    for (var i = 0; i < cells * cells; i++) {
-      var density = 1 - d[i * 4 + ink[1]] / 255, rad = cell / 2 * 1.1 * Math.sqrt(density);
-      if (rad < 0.4) continue;
-      g.beginPath();
-      g.arc(x + (i % cells + 0.5) * cell + ink[2], y + (Math.floor(i / cells) + 0.5) * cell + ink[3], rad, 0, Math.PI * 2);
-      g.fill();
-    }
-  });
-  g.globalAlpha = 1;
-  g.fillStyle = '#141414';
-  for (var i = 0; i < cells * cells; i++) {
-    var l = (0.3 * d[i * 4] + 0.59 * d[i * 4 + 1] + 0.11 * d[i * 4 + 2]) / 255;
-    var rad = cell / 2 * 1.15 * Math.sqrt(Math.max(0, (1 - l) - 0.2) / 0.8);
-    if (rad < 0.4) continue;
-    g.beginPath();
-    g.arc(x + (i % cells + 0.5) * cell, y + (Math.floor(i / cells) + 0.5) * cell, rad, 0, Math.PI * 2);
-    g.fill();
-  }
-  g.restore();
-}
-
-// A star drawn in white pen, gone over a few times, with some shading.
-function scribbleStar(g, cx, cy, r) {
-  g.save();
-  g.strokeStyle = 'rgba(250, 246, 236, .9)';
-  g.lineCap = g.lineJoin = 'round';
-  for (var pass = 0; pass < 3; pass++) {
-    g.lineWidth = 2.4 - pass * 0.5;
-    var turn = -Math.PI / 2 + (Math.random() - 0.5) * 0.15;
-    g.beginPath();
-    for (var i = 0; i <= 10; i++) {
-      var a = turn + i * Math.PI / 5, d = (i % 2 ? 0.42 : 1) * r * (1 + (Math.random() - 0.5) * 0.12);
-      var px = cx + Math.cos(a) * d + (Math.random() - 0.5) * 6, py = cy + Math.sin(a) * d + (Math.random() - 0.5) * 6;
-      if (i) g.lineTo(px, py); else g.moveTo(px, py);
-    }
-    g.stroke();
-  }
-  g.lineWidth = 1.3;
-  g.beginPath();
-  for (var k = 0; k < 14; k++) { // hatching across the middle
-    var hx = cx - r * 0.35 + k * r * 0.05;
-    g.moveTo(hx, cy - r * 0.25 + (Math.random() - 0.5) * 8);
-    g.lineTo(hx + r * 0.12, cy + r * 0.3 + (Math.random() - 0.5) * 8);
-  }
-  g.stroke();
-  g.restore();
-}
-
-// Diptych after the red halftone reference: a halftone print of one face on
-// red paper on top, and below, the photo in black and white with a red
-// square of paper over that face and a star drawn on it in white.
-function makeHalftone(canvas, photo) {
-  canvas.width = PW; canvas.height = PH * 2;
-  var g = canvas.getContext('2d'), c = coverHalf(photo), f = faceBox(photo);
-  var k = c.w / photo.print.width; // print pixels to poster pixels
-
-  // top: red paper, the halftone face, and a signature
-  paper(g, 0, 0, PW, PH, '#c2402f', 'rgba(120, 20, 10, .3)');
-  var size = 470;
-  halftone(g, photo.print, f.cx - f.side / 2, f.cy - f.side / 2, f.side, (PW - size) / 2, 90, size);
-  handwrite(g, '@_come_n_see_', PW / 2, 90 + size + 85, 58, '#f6f1e6', -0.03, 'center');
-
-  // bottom: the photo in black and white
-  var t = document.createElement('canvas');
-  t.width = PW; t.height = PH;
-  var tg = t.getContext('2d');
-  tg.drawImage(photo.print, c.x, c.y, c.w, c.h);
-  var img = tg.getImageData(0, 0, PW, PH), d = img.data;
-  for (var i = 0; i < d.length; i += 4) {
-    var l = 0.3 * d[i] + 0.59 * d[i + 1] + 0.11 * d[i + 2];
-    l = Math.min(255, Math.max(0, (l - 128) * 1.25 + 135));
-    d[i] = d[i + 1] = d[i + 2] = l;
-  }
-  tg.putImageData(img, 0, 0);
-  g.drawImage(t, 0, PH);
-
-  // the red square over the face, kept inside the photo
-  var side = Math.min(f.side * k * 1.05, PH * 0.8);
-  var sx = Math.min(Math.max(c.x + f.cx * k - side / 2, 20), PW - side - 20);
-  var sy = Math.min(Math.max(c.y + f.cy * k - side / 2, 20), PH - side - 20);
-  g.save();
-  g.translate(sx + side / 2, PH + sy + side / 2);
-  g.rotate(-0.03);
-  g.shadowColor = 'rgba(30, 20, 10, .35)';
-  g.shadowBlur = 6;
-  g.shadowOffsetY = 2;
-  paper(g, -side / 2, -side / 2, side, side, '#c2402f', 'rgba(120, 20, 10, .3)');
-  g.restore();
-  scribbleStar(g, sx + side / 2, PH + sy + side / 2, side * 0.36);
 }
 
 // The logo and text fade and slide in, one after the other.
