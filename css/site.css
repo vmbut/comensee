@@ -6,10 +6,10 @@
   --mobile-site-gutter: 6vw;
   --maxPageWidth: 1500px;
 
-  --accent: hsl(226.36 15.28% 28.24%);      /* slate: headings, links */
-  --red: hsl(0 96.23% 31.18%);              /* wordmark red */
+  --ink: #1c1c1c;                           /* crayon black, as in the logo */
 
-  --font: "Roboto", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  /* Handwriting, close to the lettering on the Come n See posters */
+  --font: "Nanum Pen Script", "Bradley Hand", "Segoe Print", cursive;
 
   /* Squarespace's fluid type: (size - 1) * 1.2vw + 1rem, capped at the max page width */
   --fs-h3: min(calc(1.2 * 1.2vw + 1rem), max(calc(1.2 * 0.012 * var(--maxPageWidth) + 1rem), 2.2rem));
@@ -17,19 +17,21 @@
   --fs-body: min(calc(0.1 * 1.2vw + 1rem), max(calc(0.1 * 0.012 * var(--maxPageWidth) + 1rem), 1.1rem));
 }
 
-/* Same theme as the Come n See page on vmbutkevich */
+/* Same paper colour as the Come n See page on vmbutkevich, in black ink */
 [data-theme="bright-inverse"] {
-  --bg: hsl(60 7.69% 94.9%); --text: var(--accent); --link: var(--accent); --h3: var(--accent);
+  --bg: hsl(60 7.69% 94.9%); --text: var(--ink); --link: var(--ink); --h3: var(--ink);
 }
 
 *, *::before, *::after { box-sizing: border-box; }
-html { font-size: 12px; -webkit-text-size-adjust: 100%; }
+html { font-size: 12px; -webkit-text-size-adjust: 100%; scroll-snap-type: y proximity; }
 body {
   margin: 0;
-  background: var(--bg);
+  /* printed paper: grain, specks and faint scratches over the paper colour */
+  background: url("/img/paper.png") var(--bg);
+  background-size: 512px;
   color: var(--text);
   font-family: var(--font);
-  font-weight: 300;
+  font-weight: 400;
   font-size: var(--fs-body);
   line-height: 1.8;
   -webkit-font-smoothing: antialiased;
@@ -38,16 +40,17 @@ body {
 img { max-width: 100%; }
 a { color: var(--link); text-underline-offset: .2em; }
 a:hover { opacity: .7; }
-h3 { font-size: var(--fs-h3); color: var(--h3); font-weight: 500; line-height: 1.3; margin: 2rem 0; }
+h3 { font-size: calc(var(--fs-h3) * 1.5); color: var(--h3); font-weight: 400; line-height: 1.1; margin: 2rem 0; }
 
-/* Home: full-screen star show with the wordmark and concept on top */
+/* Home: full-screen star show, with the logo centred above it and the concept below */
 .hero {
   position: relative;
+  scroll-snap-align: start;
   min-height: 100vh;
   min-height: 100svh;
   display: flex;
 }
-.star-show { position: fixed; inset: 0; }
+.star-show { position: absolute; inset: 0; }
 .star-show canvas { display: block; width: 100%; height: 100%; }
 .hero-content {
   position: relative;
@@ -55,22 +58,48 @@ h3 { font-size: var(--fs-h3); color: var(--h3); font-weight: 500; line-height: 1
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  align-items: center;
   gap: 4vh;
-  padding: var(--site-gutter);
+  padding: 2.5vw var(--site-gutter);
+  text-align: center;
 }
 .logo { margin: 0; line-height: 0; }
-.logo img { width: min(64vw, 900px); height: auto; }
-.hero-text { max-width: 34em; font-size: var(--fs-large); line-height: 1.6; }
-.hero-text p { margin: .6em 0 0; }
-/* Text sits on strips of the page colour so it stays readable over the stars */
-.hero-text span {
-  background: var(--bg);
-  padding: .1em .35em;
-  -webkit-box-decoration-break: clone;
-          box-decoration-break: clone;
+.logo img { display: block; width: min(20vw, 300px); height: auto; }
+/* Nanum Pen Script runs small, so its sizes are scaled up from the type scale */
+.hero-text { max-width: 30em; font-size: calc(var(--fs-large) * 1.25); line-height: 1.15; }
+.hero-text p { margin: .5em 0 0; }
+.hero-links { font-size: calc(var(--fs-body) * 1.5); }
+.hero-links span + span { margin-left: .8em; }
+
+/* Prints: one full screen showing the photo the stars above come from,
+   swapping straight to the next with them (see site.js). The drop shadow
+   falls inside the star-shaped holes, so they look cut. */
+.prints {
+  position: relative;
+  height: 100vh;
+  height: 100svh;
+  scroll-snap-align: start;
 }
-.hero-links { font-size: var(--fs-body); }
-.hero-links span + span { margin-left: .6em; }
+.print { position: absolute; inset: 0; margin: 0; visibility: hidden; }
+.print.is-shown { visibility: visible; }
+.print canvas, .print img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: drop-shadow(0.6px 1.4px 1.5px rgba(40, 30, 20, .4));
+}
+/* Mixed-media posters are shown whole in the middle of the screen. The
+   hand-made ones are transparent around their pieces, so the paper shows
+   and the shadow falls around each piece. */
+.print.poster { padding: 4svh var(--site-gutter); }
+.print.poster canvas, .print.poster img { object-fit: contain; filter: drop-shadow(0 4px 14px rgba(40, 30, 20, .25)); }
+/* On upright screens a landscape print would lose its sides, so it sits whole in the middle */
+@media (orientation: portrait) {
+  .print { display: flex; align-items: center; }
+  .print canvas { height: auto; }
+  .print.poster canvas, .print.poster img { height: 100%; }
+}
 
 /* Plain centred page (404) */
 .page { min-height: 66vh; padding: 6.6vmax var(--site-gutter); text-align: center; }
@@ -79,7 +108,7 @@ h3 { font-size: var(--fs-h3); color: var(--h3); font-weight: 500; line-height: 1
 .js .hero-content > * { opacity: 0; transform: translateY(40px); transition: opacity .6s ease, transform .6s ease; }
 .js .hero-content > .in { opacity: 1; transform: none; }
 
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 
 @media (max-width: 767px) {
   /* On phones the original scales type with the screen height instead of its width */
@@ -89,7 +118,7 @@ h3 { font-size: var(--fs-h3); color: var(--h3); font-weight: 500; line-height: 1
     --fs-body: calc(.1 * .012 * min(100vh, 900px) + 1rem);
   }
   .hero-content { padding: var(--mobile-site-gutter); }
-  .logo img { width: 100%; }
+  .logo img { width: 52vw; }
 }
 
 @media (prefers-reduced-motion: reduce) {
